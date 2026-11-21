@@ -300,12 +300,17 @@ if (!function_exists('db_mysql_connect')) {
     function db_mysql_connect(string $host, string $port)
     {
         $config = db_config();
+        // ERRORMODE обязателен: иначе ошибка подключения вернёт false
+        // вместо исключения и код упадёт на вызове метода у false.
         $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_TIMEOUT => 4,
         ];
         $charset = (string) ($config['charset'] ?: 'utf8mb4');
+        if (defined('PDO::MYSQL_ATTR_INIT_COMMAND')) {
+            $options[PDO::MYSQL_ATTR_INIT_COMMAND] = 'SET NAMES ' . $charset;
+        }
         $database = (string) $config['database'];
         $dsn = 'mysql:host=' . $host . ';port=' . $port . ';charset=' . $charset;
 
@@ -313,6 +318,10 @@ if (!function_exists('db_mysql_connect')) {
             $pdo = new PDO($dsn, (string) $config['user'], (string) $config['pass'], $options);
         } catch (Throwable $e) {
             return $e->getMessage();
+        }
+
+        if (!$pdo instanceof PDO) {
+            return 'драйвер MySQL вернул некорректный ответ';
         }
 
         try {
