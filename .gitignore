@@ -9,3 +9,6 @@ semiglazov/config.local.php
 # Служебные файлы IDE/ОС
 .DS_Store
 Thumbs.db
+
+# Готовый архив для скачивания (собирается из semiglazov/)
+!semiglazov-openserver.zip
