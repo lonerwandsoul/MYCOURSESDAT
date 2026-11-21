@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -12,14 +12,14 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename="favorit-analytics-' . date('Y-m-d') . '.csv"');
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, ['Месяц', 'Выпуск, шт.', 'Брак, шт.', 'Брак, %', 'Часы', 'Загрузка, %', 'Выручка, ₽', 'Себестоимость, ₽', 'Прибыль, ₽', 'Заказы'], ';');
+    fputcsv($out, ['Месяц', 'Выпуск, шт.', 'Брак, шт.', 'Брак, %', 'Часы', 'Загрузка, %', 'Выручка, ₽', 'Себестоимость, ₽', 'Прибыль, ₽', 'Заказы'], ';', '"', '');
     foreach ($monthly as $row) {
         fputcsv($out, [
             $row['period'], $row['qty'], $row['defects'], number_format($row['defect_rate'], 2, ',', ''),
             number_format($row['hours'], 1, ',', ''), number_format($row['load'], 1, ',', ''),
             number_format($row['revenue'], 2, ',', ''), number_format($row['cost'], 2, ',', ''),
             number_format($row['profit'], 2, ',', ''), $row['orders'],
-        ], ';');
+        ], ';', '"', '');
     }
     fclose($out);
     an_audit($pdo, (string) ($_SESSION['user_name'] ?? 'гость'), 'Экспорт отчёта', 'CSV за ' . count($monthly) . ' мес.');
@@ -48,7 +48,7 @@ $audit = $pdo->query('SELECT * FROM an_audit ORDER BY id DESC LIMIT 50')->fetchA
 $targets = $pdo->query('SELECT * FROM an_targets ORDER BY metric')->fetchAll();
 $pageTitle = 'Управление и отчётность';
 $activePage = 'reports';
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 ?>
 <link rel="stylesheet" href="analytics.css">
 <div class="an-wrap">
@@ -126,4 +126,4 @@ require_once 'header.php';
         <?php endif; ?>
     </div>
 </div>
-<?php require_once 'analytics_footer.php'; ?>
+<?php require_once __DIR__ . '/analytics_footer.php'; ?>

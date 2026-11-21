@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="login-shell">
     <div class="login-card">
         <div class="login-brand">
-            <img src="изображения/logo.jpg" alt="Фаворит">
+            <img src="images/logo.jpg" alt="Фаворит">
             <div><span>СМП</span><b>Фаворит Диван</b></div>
         </div>
         <h1>Вход в аналитику</h1>

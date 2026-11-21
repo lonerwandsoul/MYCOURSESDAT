@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -20,7 +20,7 @@ $labels = array_map(static fn ($row) => $row['label'], $monthly);
 $chart = an_line_chart($labels, [
     ['name' => 'Производительность, изделий', 'color' => '#2f6fed', 'values' => array_column($monthly, 'qty'), 'format' => 'an_num'],
     ['name' => 'Брак, %', 'color' => '#f04438', 'values' => array_column($monthly, 'defect_rate'), 'format' => static fn ($v) => number_format((float) $v, 1, ',', ' '), 'axis' => 'right'],
-], 980, 320, max(1.0, (float) max(array_column($monthly, 'qty'))), 'an_num');
+], 980, 320, max(1.0, an_max_column($monthly, 'qty')), 'an_num');
 
 $forecast = an_forecast($monthly, 'revenue');
 $insights = an_insights($pdo, $monthly, $kpi + ['period' => $period], $previous);
@@ -41,7 +41,7 @@ $sections = [
     ['title' => 'Данные', 'href' => 'admin.php', 'text' => 'Источники и демо-режим', 'value' => '10 таблиц', 'icon' => '⛁'],
 ];
 
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 ?>
 <link rel="stylesheet" href="analytics.css">
 <div class="an-wrap">
@@ -189,4 +189,4 @@ require_once 'header.php';
         </div>
     </div>
 </div>
-<?php require_once 'analytics_footer.php'; ?>
+<?php require_once __DIR__ . '/analytics_footer.php'; ?>

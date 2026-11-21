@@ -3,8 +3,9 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($pageTitle)) $pageTitle = 'Мебельная Фабрика "Фаворит"';
 if (!isset($activePage)) $activePage = '';
 if (!isset($productsCount)) {
-    try { $productsCount = $pdo->query("SELECT COUNT(*) FROM products WHERE is_active=1")->fetchColumn(); }
-    catch (Exception $e) { $productsCount = 0; }
+    // Справочник продукции (работает и в MySQL, и в резервной базе SQLite).
+    try { $productsCount = (int) $pdo->query('SELECT COUNT(*) FROM an_products WHERE active = 1')->fetchColumn(); }
+    catch (Throwable $e) { $productsCount = 0; }
 }
 ?>
 <!DOCTYPE html>
@@ -113,6 +114,21 @@ if (!isset($productsCount)) {
     .brand-text { display: grid; gap: 2px; line-height: 1.1; }
     .brand-text span { font-size: 12px; letter-spacing: .12em; color: #c9c9c9; }
     .brand-text b { font-size: 16px; color: #fff; }
+
+    /* Индикатор движка базы данных */
+    .db-badge {
+        display: inline-block;
+        margin-bottom: 8px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        text-decoration: none;
+    }
+    .db-badge.mysql { background: #12433a; color: #6ee7b7; border: 1px solid #1c6b5b; }
+    .db-badge.sqlite { background: #4a3a12; color: #fcd34d; border: 1px solid #7a6120; }
 </style>
 </head>
 <body>
@@ -120,7 +136,7 @@ if (!isset($productsCount)) {
 
     <nav class="sidebar" id="sidebar">
         <div class="logo">
-            <img src="изображения/logo.jpg" alt="logo" class="logo-icon">
+            <img src="images/logo.jpg" alt="logo" class="logo-icon">
             <div class="brand-text"><span>СМП</span><b>Фаворит Диван</b></div>
         </div>
         <ul class="nav-menu">
@@ -142,6 +158,15 @@ if (!isset($productsCount)) {
             <?php endif; ?>
         </ul>
         <div class="sidebar-user">
+            <?php $engine = $dbInfo['engine'] ?? ''; ?>
+            <?php if ($engine !== ''): ?>
+                <span class="db-badge <?= $engine === 'mysql' ? 'mysql' : 'sqlite' ?>"
+                      title="<?= $engine === 'mysql'
+                          ? 'MySQL: ' . htmlspecialchars((string) ($dbInfo['host'] ?? ''), ENT_QUOTES, 'UTF-8')
+                          : 'Резервная база: ' . htmlspecialchars((string) ($dbInfo['file'] ?? 'SQLite'), ENT_QUOTES, 'UTF-8') ?>">
+                    <?= $engine === 'mysql' ? 'MySQL' : 'SQLite · резерв' ?>
+                </span>
+            <?php endif; ?>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <span class="role"><?= ($_SESSION['role'] ?? 'manager') === 'admin' ? 'администратор' : 'сотрудник' ?></span>
                 <span class="name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Сотрудник') ?></span>

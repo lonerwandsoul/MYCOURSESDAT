@@ -24,6 +24,24 @@ function an_money($value, bool $short = false): string
     return number_format($value, 0, ',', ' ') . ' ₽';
 }
 
+/** Максимум по массиву значений с запасным вариантом, если данных ещё нет. */
+function an_max_value(array $values, float $default = 0.0): float
+{
+    if (!$values) {
+        return $default;
+    }
+    return max(array_map('floatval', array_values($values)));
+}
+
+/** Максимум по колонке строк результата (например, array_column) — безопасно для пустой базы. */
+function an_max_column(array $rows, string $field, float $default = 0.0): float
+{
+    if (!$rows) {
+        return $default;
+    }
+    return an_max_value(array_column($rows, $field), $default);
+}
+
 function an_num($value, int $decimals = 0): string
 {
     return number_format((float) $value, $decimals, ',', ' ');

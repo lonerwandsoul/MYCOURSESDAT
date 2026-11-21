@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -44,12 +44,12 @@ $labels = array_map(static fn ($row) => $row['label'], $monthly);
 $ordersChart = an_line_chart($labels, [
     ['name' => 'Заказы, шт.', 'color' => '#2f6fed', 'values' => array_column($monthly, 'orders'), 'format' => 'an_num'],
     ['name' => 'Средний чек, тыс. ₽', 'color' => '#12b76a', 'values' => array_map(static fn ($row) => $row['orders'] > 0 ? $row['revenue'] / $row['orders'] / 1000 : 0, $monthly), 'format' => static fn ($v) => number_format((float) $v, 1, ',', ' ')],
-], 980, 300, max(1.0, (float) max(array_column($monthly, 'orders')) * 1.15), 'an_num');
+], 980, 300, max(1.0, an_max_column($monthly, 'orders') * 1.15), 'an_num');
 $channelBars = an_bar_chart(array_column($byChannel, 'channel'), array_column($byChannel, 'revenue'), '#2f6fed', static fn ($v) => an_money($v, true));
 
 $pageTitle = 'Продажи и маркетинг';
 $activePage = 'sales';
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 ?>
 <link rel="stylesheet" href="analytics.css">
 <div class="an-wrap">
@@ -133,4 +133,4 @@ require_once 'header.php';
     </div>
 <?php endif; ?>
 
-<?php require_once 'analytics_footer.php'; ?>
+<?php require_once __DIR__ . '/analytics_footer.php'; ?>
