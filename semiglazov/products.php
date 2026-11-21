@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -50,7 +50,7 @@ $chart = an_bar_chart(array_keys($byCategory), array_map('count', $byCategory), 
 
 $pageTitle = 'Справочник продукции';
 $activePage = 'catalog';
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 ?>
 <link rel="stylesheet" href="analytics.css">
 <div class="an-wrap">
@@ -137,4 +137,4 @@ require_once 'header.php';
     </div>
 <?php endif; ?>
 
-<?php require_once 'analytics_footer.php'; ?>
+<?php require_once __DIR__ . '/analytics_footer.php'; ?>

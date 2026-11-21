@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -73,13 +73,16 @@ $dbStatus = [
         ? $dbInfo['database'] . ' @ ' . $dbInfo['host']
         : (string) ($dbInfo['file'] ?? 'файл'),
     'note' => $dbInfo['engine'] === 'mysql'
-        ? ('импорт дампа: ' . ((int) ($dbInfo['imported'] ?? 0) > 0 ? 'выполнен' : 'не требуется'))
-        : 'резервный режим: MySQL недоступен',
+        ? ('импорт дампа: ' . ((int) ($dbInfo['imported'] ?? 0) > 0 ? 'выполнен' : 'не требуется')
+            . ' · PHP ' . ($dbInfo['php'] ?? PHP_VERSION))
+        : 'резервный режим: MySQL недоступен' . (!empty($dbInfo['drivers']) && !in_array('mysql', (array) $dbInfo['drivers'], true)
+            ? ' (нет расширения pdo_mysql)'
+            : ' (сервер не найден или выключен)'),
 ];
 
 $pageTitle = 'Данные и демо-режим';
 $activePage = 'admin';
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 ?>
 <link rel="stylesheet" href="analytics.css">
 <div class="an-wrap">
@@ -189,4 +192,4 @@ require_once 'header.php';
         </div>
     </div>
 </div>
-<?php require_once 'analytics_footer.php'; ?>
+<?php require_once __DIR__ . '/analytics_footer.php'; ?>

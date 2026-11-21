@@ -1,0 +1,11 @@
+# Данные резервной базы и служебный кэш подключения (создаются при запуске)
+semiglazov/data/*
+!semiglazov/data/.htaccess
+!semiglazov/data/index.html
+
+# Локальные настройки с паролями
+semiglazov/config.local.php
+
+# Служебные файлы IDE/ОС
+.DS_Store
+Thumbs.db

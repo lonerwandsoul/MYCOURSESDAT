@@ -1,0 +1,25 @@
+# ============================================================================
+#  Настройки Apache для OpenServer Panel 5/6.
+#  Nginx этот файл не читает — для Nginx см. README-OPENSERVER.md.
+# ============================================================================
+
+# Кодировка страниц и файлы по умолчанию
+AddDefaultCharset UTF-8
+DirectoryIndex index.php index.html
+
+# Не показывать содержимое папок списком
+<IfModule mod_autoindex.c>
+    Options -Indexes
+</IfModule>
+
+# Служебные файлы не должны скачиваться из браузера:
+# дамп базы, резервная база SQLite, кэш подключения, конфиги проекта.
+<FilesMatch "\.(sql|sqlite|sqlite3|db|json|ini|md|txt|bat|log)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

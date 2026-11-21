@@ -1,279 +1,213 @@
 <?php
 /**
- * Подключение к базе данных.
+ * Подключение к базе данных. Работает в двух режимах:
  *
- * Порядок работы:
- *   1. Параметры берутся из config.php (или переменных окружения).
- *   2. Если базы нет — она создаётся сама (CREATE DATABASE).
- *   3. Если MySQL недоступен, а резерв разрешён — используется SQLite,
- *      чтобы сайт открывался даже без запущенного OpenServer/MySQL.
- *   4. Таблицы и демонстрационные данные создаются автоматически
- *      при первом открытии любой страницы.
+ *   1. MySQL / MariaDB (OpenServer Panel 5 и 6). Сервер и порт определяются
+ *      автоматически: config.local.php → переменные окружения → имена модулей
+ *      из файла hosts (MySQL-8.4, MySQL-8.0, MariaDB-…) → 127.0.0.1:3306–3308.
+ *      База favorit_db создаётся сама, таблицы и демо-данные тоже.
  *
- * Режим проверяется в разделе «Данные» (admin.php).
+ *   2. SQLite (файл data/favorit.sqlite). Включается автоматически, если MySQL
+ *      не запущен или расширение pdo_mysql не подключено. Сайт полностью
+ *      работоспособен: те же таблицы, те же демонстрационные цифры.
+ *
+ * Если не подключено НИ ОДНО расширение баз данных (нет ни pdo_mysql, ни
+ * pdo_sqlite), вместо «белого экрана» открывается понятная страница
+ * с инструкцией — см. check.php.
+ *
+ * После подключения в переменных доступны:
+ *   $pdo      — объект PDO (все страницы работают через него);
+ *   $dbInfo   — движок, база, хост, файл, ошибки (показывается в admin.php);
+ *   $dbError  — текст последней ошибки подключения (пустая строка, если всё хорошо).
  */
 
 require_once __DIR__ . '/analytics_schema.php';
 
-if (!function_exists('db_config')) {
-    /** Настройки подключения из config.php. */
-    function db_config(): array
+require_once __DIR__ . '/db_probe.php';
+
+/* --------------------------------------------------------- страница с ошибкой */
+
+if (!function_exists('db_fatal_page')) {
+    /** Понятная страница вместо «белого экрана», когда БД недоступна совсем. */
+    function db_fatal_page(string $details): void
     {
-        static $config = null;
-        if ($config === null) {
-            $file = __DIR__ . '/config.php';
-            $config = is_file($file) ? (array) require $file : [];
-            $config += [
-                'host' => '127.0.0.1',
-                'port' => '3306',
-                'database' => 'favorit_db',
-                'user' => 'root',
-                'pass' => '',
-                'sqlite_fallback' => true,
-                'sqlite_dir' => __DIR__ . '/data',
-            ];
+        $php = PHP_VERSION;
+        $drivers = db_available_drivers();
+        $driverText = $drivers ? implode(', ', $drivers) : 'нет ни одного';
+        $e = static fn ($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+
+        if ($drivers) {
+            $headline = 'База данных не подключена';
+            $lead = 'Расширения PDO в PHP есть (' . $e($driverText) . '), но ни MySQL, ни резервная база '
+                . 'SQLite не открылись. Обычно помогает включить модуль <b>MySQL-8.4</b> в OpenServer '
+                . 'Panel и перезапустить панель — либо разрешить резервный режим SQLite '
+                . '(<code>sqlite_fallback = true</code> в <code>config.php</code>).';
+        } else {
+            $headline = 'Не подключено ни одно расширение баз данных';
+            $lead = 'Сайт умеет работать без MySQL — на резервной базе SQLite. Но в текущей сборке PHP '
+                . 'не включены расширения <code>pdo_sqlite</code> и <code>pdo_mysql</code>, поэтому '
+                . 'сохранять данные некуда.';
         }
-        return $config;
+
+        http_response_code(503);
+        echo '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>База данных недоступна — Фаворит</title>'
+            . '<style>body{margin:0;background:#0f1117;font-family:"Segoe UI",system-ui,sans-serif;color:#1a1f2e}'
+            . '.wrap{max-width:820px;margin:0 auto;padding:48px 20px}'
+            . '.card{background:#fff;border-radius:18px;padding:30px 32px;box-shadow:0 24px 60px rgba(0,0,0,.35)}'
+            . 'h1{font-size:22px;margin:0 0 6px}p{line-height:1.65;font-size:14px;color:#3c4257}'
+            . 'code{background:#eef2ff;color:#2f6fed;padding:1px 6px;border-radius:4px}'
+            . 'ol{padding-left:20px;line-height:1.8;font-size:14px;color:#3c4257}'
+            . '.note{background:#fff7e8;border:1px solid #f7d9a8;border-radius:10px;padding:12px 14px;font-size:13px;color:#8a5a00}'
+            . '.tech{margin-top:18px;font-size:12px;color:#a61b12;word-break:break-word}'
+            . 'a.btn{display:inline-block;margin-top:18px;background:#2f6fed;color:#fff;text-decoration:none;'
+            . 'padding:11px 18px;border-radius:10px;font-size:14px;font-weight:600}</style></head><body>'
+            . '<div class="wrap"><div class="card">'
+            . '<h1>' . $headline . '</h1>'
+            . '<p>' . $lead . '</p>'
+            . '<div class="note">PHP ' . $e($php) . ' · доступные драйверы PDO: ' . $e($driverText) . '</div>'
+            . '<p style="margin-top:18px"><b>Как включить (OpenServer Panel 6):</b></p>'
+            . '<ol>'
+            . '<li>Меню OSP в трее → <b>Модули</b> → включите <b>PHP-8.4</b> (или <b>PHP-8.4-FCGI</b>) и <b>MySQL-8.4</b>.</li>'
+            . '<li>Меню → <b>Настройки</b> → <b>PHP</b> → выберите профиль нужной версии → '
+            . 'в списке расширений отметьте <code>pdo_mysql</code>, <code>pdo_sqlite</code>, <code>sqlite3</code> и сохраните.</li>'
+            . '<li>Или откройте вручную файл <code>modules/php/PHP-8.4/ini/php.ini</code> (путь внутри папки OSP) '
+            . 'и убедитесь, что строки <code>extension=pdo_mysql</code> и <code>extension=pdo_sqlite</code> не закомментированы.</li>'
+            . '<li>Перезапустите сервер: меню OSP → <b>Перезапустить</b>.</li>'
+            . '</ol>'
+            . '<p><b>Как быстро проверить, что всё включилось:</b> откройте <code>check.php</code> — '
+            . 'страница «Проверка окружения» работает вообще без базы данных.</p>'
+            . '<a class="btn" href="check.php">Открыть проверку окружения</a>'
+            . '<div class="tech">Техническая информация: ' . $e($details) . '</div>'
+            . '</div></div></body></html>';
+        exit;
     }
 }
 
-if (!function_exists('db_dsn')) {
-    /** DSN для MySQL без имени базы (нужен, чтобы создать базу при первом запуске). */
-    function db_dsn(bool $withDatabase = true): string
+/* ------------------------------------------------------------- установка БД */
+
+if (!function_exists('db_is_installed')) {
+    /** Есть ли в базе рабочие таблицы (быстрая проверка без DDL). */
+    function db_is_installed(PDO $pdo): bool
     {
-        $config = db_config();
-        $dsn = 'mysql:host=' . $config['host'] . ';port=' . $config['port'] . ';charset=utf8mb4';
-        if ($withDatabase) {
-            $dsn = 'mysql:host=' . $config['host'] . ';port=' . $config['port']
-                . ';dbname=' . $config['database'] . ';charset=utf8mb4';
-        }
-        return $dsn;
-    }
-}
-
-if (!function_exists('db_configure')) {
-    /** Настройки PDO: исключения и ассоциативные массивы. */
-    function db_configure(PDO $pdo): PDO
-    {
-        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-        return $pdo;
-    }
-}
-
-if (!function_exists('db_sqlite_file')) {
-    /** Файл SQLite: ищем каталог, куда PHP действительно может писать. */
-    function db_sqlite_file(): ?string
-    {
-        $config = db_config();
-        $candidates = array_filter([
-            (string) $config['sqlite_dir'],
-            __DIR__ . '/data',
-            __DIR__ . '/../favorit-data',
-            sys_get_temp_dir() . '/favorit',
-            (string) getenv('LOCALAPPDATA') . '/favorit',
-        ], static fn ($dir) => $dir !== '' && $dir !== '/favorit');
-
-        foreach ($candidates as $dir) {
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0775, true);
-            }
-            if (!is_dir($dir)) {
-                continue;
-            }
-            $probe = $dir . '/.write-test';
-            if (@file_put_contents($probe, 'ok') !== false) {
-                @unlink($probe);
-                return $dir . '/favorit.sqlite';
-            }
-        }
-        return null;
-    }
-}
-
-if (!function_exists('db_connect_mysql')) {
-    /** Подключение к MySQL. Если базы нет — создаём её и повторяем попытку. */
-    function db_connect_mysql(): PDO
-    {
-        $config = db_config();
-        $options = [
-            PDO::ATTR_TIMEOUT => 3,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ];
-
         try {
-            return new PDO(db_dsn(true), $config['user'], $config['pass'], $options);
-        } catch (PDOException $e) {
-            $missingDatabase = (int) $e->getCode() === 1049
-                || stripos($e->getMessage(), 'Unknown database') !== false;
-            if (!$missingDatabase) {
-                throw $e;
-            }
+            $pdo->query('SELECT 1 FROM an_production LIMIT 1');
+            return true;
+        } catch (Throwable $e) {
+            return false;
         }
-
-        // Базы ещё нет: создаём её от имени сервера и подключаемся заново.
-        $server = new PDO(db_dsn(false), $config['user'], $config['pass'], $options);
-        $server->exec(
-            'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '', $config['database'])
-            . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
-        );
-        $server = null;
-
-        return new PDO(db_dsn(true), $config['user'], $config['pass'], $options);
     }
 }
 
-if (!function_exists('db_import_dump')) {
-    /**
-     * Импорт database/favorit_db.sql в MySQL, если база пустая
-     * (в ней ещё нет таблицы an_production). Так проект работает
-     * после простого копирования в OpenServer, без phpMyAdmin.
-     */
-    function db_import_dump(PDO $pdo): int
-    {
-        $file = __DIR__ . '/database/favorit_db.sql';
-        if (!is_file($file)) {
-            return 0;
-        }
-        $statements = db_split_sql((string) file_get_contents($file));
-        $executed = 0;
-        foreach ($statements as $statement) {
-            if (preg_match('/^\s*(CREATE DATABASE|USE)\s/i', $statement)) {
-                continue;                                    // база уже открыта
-            }
-            if (preg_match('/^\s*SET\s/i', $statement)) {
-                try { $pdo->exec($statement); } catch (Throwable $ignored) {}
-                continue;
-            }
-            $pdo->exec($statement);
-            $executed++;
-        }
-        return $executed;
-    }
-}
-
-if (!function_exists('db_split_sql')) {
-    /** Делит SQL-файл на отдельные запросы (кавычки и комментарии учитываются). */
-    function db_split_sql(string $sql): array
-    {
-        $statements = [];
-        $buffer = '';
-        $length = strlen($sql);
-        $quote = null;
-        for ($i = 0; $i < $length; $i++) {
-            $char = $sql[$i];
-            $next = $i + 1 < $length ? $sql[$i + 1] : '';
-            if ($quote !== null) {
-                $buffer .= $char;
-                if ($char === '\\' && $quote !== '`') {
-                    $buffer .= $next;
-                    $i++;
-                } elseif ($char === $quote) {
-                    $quote = null;
-                }
-                continue;
-            }
-            if (($char === '-' && $next === '-') || $char === '#') {
-                while ($i < $length && $sql[$i] !== "\n") { $i++; }
-                continue;
-            }
-            if ($char === '/' && $next === '*') {
-                $end = strpos($sql, '*/', $i + 2);
-                $i = $end === false ? $length : $end + 1;
-                continue;
-            }
-            if ($char === "'" || $char === '"' || $char === '`') {
-                $quote = $char;
-                $buffer .= $char;
-                continue;
-            }
-            if ($char === ';') {
-                $trimmed = trim($buffer);
-                if ($trimmed !== '') { $statements[] = $trimmed; }
-                $buffer = '';
-                continue;
-            }
-            $buffer .= $char;
-        }
-        $trimmed = trim($buffer);
-        if ($trimmed !== '') { $statements[] = $trimmed; }
-        return $statements;
-    }
-}
+/* --------------------------------------------------------------- подключение */
 
 $pdo = null;
 $dbError = '';
-$dbEngine = 'mysql';
+$dbEngine = '';
 $dbFile = null;
-$dbImported = 0;
+$dbHost = '';
+$dbPort = '';
+$dbTried = [];
+$dbDumpImported = 0;
 
-try {
-    $pdo = db_configure(db_connect_mysql());
-    $dbEngine = 'mysql';
+$drivers = db_available_drivers();
+$config = db_config();
+$cache = db_cache_read();
 
-    // Пустая база (только что создана): импортируем структуру и демо-данные
-    // из database/favorit_db.sql, чтобы цифры в отчётах были готовы сразу.
-    $empty = false;
-    try {
-        $pdo->query('SELECT 1 FROM an_production LIMIT 1');
-    } catch (Throwable $notYet) {
-        $empty = true;
-    }
-    if ($empty) {
-        $dbImported = db_import_dump($pdo);
-    }
-} catch (Throwable $e) {
-    $dbError = $e->getMessage();
-    $dbEngine = 'sqlite';
-    $pdo = null;
+// --- 1. MySQL ---------------------------------------------------------------
+if (empty($config['mysql'])) {
+    $dbError = 'MySQL отключён в config.php (mysql = false) — используется резервная база';
+} elseif (in_array('mysql', $drivers, true)) {
+    $skipUntil = (int) ($cache['mysql_skip_until'] ?? 0);
+    if ($skipUntil > time()) {
+        $dbError = (string) ($cache['mysql_error'] ?? 'MySQL не запущен');
+        $dbTried = (array) ($cache['mysql_tried'] ?? []);
+    } else {
+        foreach (db_mysql_candidates() as $candidate) {
+            $host = (string) $candidate['host'];
+            $port = (string) $candidate['port'];
+            $dbTried[] = $host . ':' . $port;
 
-    if (!empty(db_config()['sqlite_fallback'])) {
-        $dbFile = db_sqlite_file();
-        if ($dbFile !== null) {
-            try {
-                $pdo = db_configure(new PDO('sqlite:' . $dbFile));
-                $pdo->exec('PRAGMA foreign_keys = ON');
-            } catch (Throwable $sqliteError) {
-                $pdo = null;
-                $dbError .= ' | SQLite: ' . $sqliteError->getMessage();
+            if (!db_port_open($host, (int) $port)) {
+                continue;
             }
+
+            $result = db_mysql_connect($host, $port);
+            if ($result instanceof PDO) {
+                $pdo = $result;
+                $dbEngine = 'mysql';
+                $dbHost = $host;
+                $dbPort = $port;
+                $dbError = '';
+                // Кэш перезаписываем только если сервер нашли в новом месте.
+                if (($cache['mysql_host'] ?? '') !== $host || (string) ($cache['mysql_port'] ?? '') !== $port) {
+                    db_cache_write(['mysql_host' => $host, 'mysql_port' => $port]);
+                }
+                break;
+            }
+            $dbError = 'MySQL ' . $host . ':' . $port . ' — ' . $result;
+        }
+
+        if ($pdo === null) {
+            if ($dbError === '') {
+                $dbError = 'MySQL не найден (проверены: '
+                    . implode(', ', array_slice($dbTried, 0, 6)) . ')';
+            }
+            db_cache_write([
+                'mysql_skip_until' => time() + max(5, (int) $config['recheck_seconds']),
+                'mysql_skip_standard' => true,
+                'mysql_error' => $dbError,
+                'mysql_tried' => $dbTried,
+            ]);
         }
     }
+} else {
+    $dbError = 'расширение pdo_mysql не подключено в PHP';
 }
 
+// --- 2. SQLite (резерв) -----------------------------------------------------
+if ($pdo === null && in_array('sqlite', $drivers, true) && !empty($config['sqlite_fallback'])) {
+    $result = db_sqlite_connect();
+    if ($result instanceof PDO) {
+        $pdo = $result;
+        $dbEngine = 'sqlite';
+        $dbFile = db_writable_dir() . '/favorit.sqlite';
+    } else {
+        $dbError .= ($dbError === '' ? '' : ' | ') . 'SQLite: ' . $result;
+    }
+}
+
+// --- 3. Совсем нет БД -------------------------------------------------------
 if ($pdo === null) {
-    http_response_code(500);
-    $host = htmlspecialchars(db_config()['host'] . ':' . db_config()['port'], ENT_QUOTES, 'UTF-8');
-    echo '<!doctype html><html lang="ru"><meta charset="utf-8"><title>Нет соединения с БД</title>'
-        . '<body style="font-family:Segoe UI,sans-serif;max-width:760px;margin:60px auto;line-height:1.6;color:#1a1f2e">'
-        . '<h1 style="font-size:22px">Не удалось подключиться к базе данных</h1>'
-        . '<p>MySQL по адресу <b>' . $host . '</b> недоступен, резервный файл SQLite создать не удалось.</p>'
-        . '<ol><li>Запустите OpenServer (MySQL должен быть зелёным).</li>'
-        . '<li>Проверьте параметры в файле <code>config.php</code>.</li>'
-        . '<li>Импортируйте <code>database/favorit_db.sql</code> через phpMyAdmin '
-        . 'или откройте <code>install.php</code> — он создаст базу сам.</li></ol>'
-        . '<p style="color:#a61b12;font-size:13px">Техническая информация: '
-        . htmlspecialchars($dbError, ENT_QUOTES, 'UTF-8') . '</p></body></html>';
-    exit;
+    if (!$drivers) {
+        $dbError .= ($dbError === '' ? '' : ' | ') . 'PDO-драйверы не подключены';
+    }
+    db_fatal_page($dbError);
 }
 
-// Таблицы и демо-данные создаются автоматически (идемпотентно).
-an_init_schema($pdo);
+// --- 4. Схема и демо-данные -------------------------------------------------
+an_ensure_schema($pdo);
 
-// Путь к файлу SQLite показываем относительно каталога проекта — так понятнее.
+// --- 5. Сведения о подключении ----------------------------------------------
 $dbFilePublic = $dbFile;
-if ($dbFile !== null && str_starts_with($dbFile, __DIR__ . DIRECTORY_SEPARATOR)) {
-    $dbFilePublic = substr($dbFile, strlen(__DIR__) + 1);
+if ($dbFilePublic !== null && strpos(str_replace('\\', '/', $dbFilePublic), str_replace('\\', '/', __DIR__) . '/') === 0) {
+    $dbFilePublic = substr(str_replace('\\', '/', $dbFilePublic), strlen(str_replace('\\', '/', __DIR__)) + 1);
 }
 
 $dbInfo = [
-    'engine' => $pdo->getAttribute(PDO::ATTR_DRIVER_NAME),
-    'imported' => $dbImported,
-    'database' => db_config()['database'],
-    'host' => db_config()['host'] . ':' . db_config()['port'],
+    'engine' => $dbEngine,                                   // 'mysql' | 'sqlite'
+    'engine_label' => $dbEngine === 'mysql' ? 'MySQL' : 'SQLite (резерв)',
+    'driver' => $pdo->getAttribute(PDO::ATTR_DRIVER_NAME),
+    'database' => (string) $config['database'],
+    'host' => $dbEngine === 'mysql' ? $dbHost . ':' . $dbPort : 'файл',
     'file' => $dbFilePublic,
+    'imported' => $dbDumpImported,
     'error' => $dbError,
+    'tried' => $dbTried,
+    'drivers' => $drivers,
+    'php' => PHP_VERSION,
+    'debug' => (bool) $config['debug'],
 ];
 
 if (session_status() === PHP_SESSION_NONE) {

@@ -1,6 +1,6 @@
 <?php
-require_once 'db.php';
-require_once 'analytics_lib.php';
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/analytics_lib.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -68,10 +68,10 @@ $chartLabels = array_map(static fn ($row) => $row['label'], $monthly);
 $chart = an_line_chart($chartLabels, [
     ['name' => 'Выпуск, изделий', 'color' => '#2f6fed', 'values' => array_column($monthly, 'qty'), 'format' => 'an_num'],
     ['name' => 'Брак, изделий', 'color' => '#f04438', 'values' => array_column($monthly, 'defects'), 'format' => 'an_num'],
-], 980, 300, max(1.0, (float) max(array_column($monthly, 'qty'))), 'an_num');
+], 980, 300, max(1.0, an_max_column($monthly, 'qty')), 'an_num');
 $bars = an_bar_chart(array_column($byWorkshop, 'workshop'), array_column($byWorkshop, 'qty'), '#2f6fed', 'an_num');
 
-require_once 'header.php';
+require_once __DIR__ . '/header.php';
 ?>
 <link rel="stylesheet" href="analytics.css">
 <div class="an-wrap">
@@ -184,4 +184,4 @@ require_once 'header.php';
     </div>
 <?php endif; ?>
 
-<?php require_once 'analytics_footer.php'; ?>
+<?php require_once __DIR__ . '/analytics_footer.php'; ?>
